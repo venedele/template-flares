@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Template
+Description=Space theme with violent flaring blue star with a more modular design
+ModuleName=template-flares
+
+[template-flares]
+ImageDir=@PLYMOUTH_THEME_PATH@/template
+ConsoleLogBackgroundColor=0x00000000
