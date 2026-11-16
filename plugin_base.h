@@ -75,20 +75,21 @@ typedef struct
         ply_boot_splash_plugin_t *plugin;
         ply_pixel_display_t      *display;
         ply_list_t               *sprites;
+        //TODO: Remove scaled_background_image
         ply_image_t              *scaled_background_image;
 
-        //TODO: Add void* data;
+        void* data;
         ply_console_viewer_t     *console_viewer;
 } view_t;
 
 
-//TODO: Perhaps link all of these
+//TODO: Link all of these
 typedef struct
 {
         //TODO: Make sure that all duplicate names are static to this file
         //TODO: Delete create plugin, add create_plugin_data as as callback
         plugin_data_t* (*create_plugin_data)(ply_boot_splash_plugin_t *plugin , ply_key_file_t *key_file);
-        void (*destroy_plugin)(ply_boot_splash_plugin_t *plugin);
+        void (*destroy_plugin_data)(ply_boot_splash_plugin_t *plugin, plugin_data_t* plugin_data);
         void (*set_keyboard)(ply_boot_splash_plugin_t *plugin, ply_keyboard_t *keyboard);
         void (*unset_keyboard)(ply_boot_splash_plugin_t *plugin, ply_keyboard_t *keyboard);
         void (*add_pixel_display)(ply_boot_splash_plugin_t *plugin, ply_pixel_display_t *display, view_t *view);
@@ -110,11 +111,13 @@ typedef struct
         void (*become_idle)(ply_boot_splash_plugin_t *plugin, ply_trigger_t *idle_trigger);
         void (*display_prompt)(ply_boot_splash_plugin_t *plugin, const char *prompt, const char *entry_text, bool is_secret);
         
-        void (*free_sprite) (sprite_t *sprite);
+        void (*free_sprite_data) (sprite_t *sprite);
         void (*view_animate_attime) (view_t *view, double time);
         void (*view_start_animation) (view_t *view);
         void (*view_setup_scene) (view_t *view);
         void (*stop_animation) (ply_boot_splash_plugin_t *plugin);
+        void* (*view_create_data) (view_t *view);
+        void (*view_free_data) (view_t *view);
         bool (*view_load) (view_t *view);
         
         void (*view_show_prompt) (view_t *view, const char *prompt, const char *entry_text, int number_of_bullets);
@@ -157,6 +160,7 @@ struct _ply_boot_splash_plugin
 };
 
 
+//TODO: This file should ultimately contain no static functions
 plugin_base_interface_t* create_base_interface();
 
 
@@ -194,7 +198,7 @@ static void destroy_plugin (ply_boot_splash_plugin_t *plugin);
 static void free_sprite (sprite_t *sprite, ply_boot_splash_plugin_t *plugin);
 static int sprite_compare_z (void *data_a, void *data_b);
 void stretch_image (ply_image_t *scaled_image, ply_image_t *orig_image, int width);
-static void sprite_list_sort (view_t *view);
+void sprite_list_sort (view_t *view);
 
 static void on_timeout (ply_boot_splash_plugin_t *plugin);
 static void on_boot_progress (ply_boot_splash_plugin_t *plugin, double duration, double fraction_done);

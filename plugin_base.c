@@ -66,11 +66,7 @@ view_new (ply_boot_splash_plugin_t *plugin,
         view = calloc (1, sizeof(view_t));
         view->plugin = plugin;
         view->display = display;
-
-        //view->entry = ply_entry_new (plugin->image_dir);
-        //view->label = ply_label_new ();
-        //view->message_label = ply_label_new ();
-
+        
         view->sprites = ply_list_new ();
 
         if (ply_console_viewer_preferred ()) {
@@ -82,6 +78,13 @@ view_new (ply_boot_splash_plugin_t *plugin,
         } else {
                 view->console_viewer = NULL;
         }
+        
+        if (plugin->plugin_base_interface->view_create_data != NULL)
+        {
+                view->data = plugin->plugin_base_interface->view_create_data(view);
+        } else {
+                view->data = NULL;
+        }
 
         return view;
 }
@@ -89,9 +92,12 @@ view_new (ply_boot_splash_plugin_t *plugin,
 static void
 view_free (view_t *view)
 {
-        //ply_entry_free (view->entry);
-        //ply_label_free (view->label);
-        //ply_label_free (view->message_label);
+        ply_boot_splash_plugin_t* plugin = view->plugin;
+        if (plugin->plugin_base_interface->view_free_data != NULL && view->data != NULL)
+        {
+               plugin->plugin_base_interface->view_free_data(view);
+        }
+        
         view_free_sprites (view);
         ply_list_free (view->sprites);
 
@@ -414,7 +420,7 @@ stretch_image (ply_image_t *scaled_image,
         }
 }
 
-static void
+void
 sprite_list_sort (view_t *view)
 {
         ply_list_sort_stable (view->sprites, &sprite_compare_z);
@@ -1059,9 +1065,9 @@ destroy_plugin (ply_boot_splash_plugin_t *plugin)
 
         free_views (plugin);
         
-        if (plugin->plugin_base_interface->destroy_plugin != NULL)
+        if (plugin->plugin_base_interface->destroy_plugin_data != NULL)
         {
-                plugin->plugin_base_interface->destroy_plugin(plugin);
+                plugin->plugin_base_interface->destroy_plugin_data(plugin, plugin->plugin_data);
         }
 
         free (plugin);
@@ -1105,18 +1111,20 @@ show_splash_screen (ply_boot_splash_plugin_t *plugin,
                 return false;
         }
         
-        ply_event_loop_watch_for_exit (loop, (ply_event_loop_exit_handler_t)
-                                       detach_from_event_loop,
-                                       plugin);
-
-        ply_trace ("starting boot animation");
-
+        
         bool res = true;
         if (plugin->plugin_base_interface->show_splash_screen != NULL)
         {
                 
                 res = plugin->plugin_base_interface->show_splash_screen(plugin, mode);
+                if(!res) return res;
         }
+        
+        ply_event_loop_watch_for_exit (loop, (ply_event_loop_exit_handler_t)
+                                       detach_from_event_loop,
+                                       plugin);
+
+        ply_trace ("starting boot animation");
         
         start_animation (plugin);
 
@@ -1249,12 +1257,15 @@ free_sprite (sprite_t *sprite, ply_boot_splash_plugin_t *plugin)
 {
         if (sprite) {
                         
-                if (plugin->plugin_base_interface->free_sprite != NULL)
+                if (plugin->plugin_base_interface->free_sprite_data != NULL && sprite->data != NULL)
                 {
-                        plugin->plugin_base_interface->free_sprite(sprite);
+                        plugin->plugin_base_interface->free_sprite_data(sprite);
                 }
                 else
-                        free (sprite);
+                {
+                        if(sprite->data) free(sprite->data);
+                }
+                free(sprite);
         }
         return;
 }
