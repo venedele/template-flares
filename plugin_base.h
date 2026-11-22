@@ -78,6 +78,9 @@ typedef struct
         //TODO: Remove scaled_background_image
         ply_image_t              *scaled_background_image;
 
+        //NOTE: Mostly signifies whether view_setup_scene should be called.
+        bool initialized;
+
         void* data;
         ply_console_viewer_t     *console_viewer;
 } view_t;
@@ -150,6 +153,7 @@ struct _ply_boot_splash_plugin
         uint32_t                       needs_redraw : 1;
         uint32_t                       is_visible : 1;
         uint32_t                       is_animating : 1;
+        uint32_t                       is_updating_animation : 1;
 
         char                          *monospace_font;
         uint32_t                       plugin_console_messages_updating : 1;

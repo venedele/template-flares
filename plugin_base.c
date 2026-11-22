@@ -211,6 +211,16 @@ process_needed_redraws (ply_boot_splash_plugin_t *plugin)
         plugin->needs_redraw = false;
 }
 
+static void pause_views_animation(ply_boot_splash_plugin_t* plugin)
+{
+        if (plugin->loop != NULL) {
+                ply_event_loop_stop_watching_for_timeout (plugin->loop,
+                                                (ply_event_loop_timeout_handler_t)
+                                                on_timeout, plugin);
+                plugin->is_updating_animation = false;
+        }
+}
+
 static void
 pause_views (ply_boot_splash_plugin_t *plugin)
 {
@@ -228,6 +238,11 @@ pause_views (ply_boot_splash_plugin_t *plugin)
 
                 node = next_node;
         }
+}
+
+static void unpause_views_animation(ply_boot_splash_plugin_t* plugin)
+{
+        on_timeout(plugin);
 }
 
 static void
@@ -434,6 +449,7 @@ on_timeout (ply_boot_splash_plugin_t *plugin)
         double now;
 
         now = ply_get_timestamp ();
+        plugin->is_updating_animation = true;
 
         node = ply_list_get_first_node (plugin->views);
 
@@ -491,12 +507,14 @@ start_animation (ply_boot_splash_plugin_t *plugin)
                 view = ply_list_node_get_data (node);
                 next_node = ply_list_get_next_node (plugin->views, node);
 
-                view_start_animation (view);
+                if(!view->initialized)
+                        view_start_animation (view);
 
                 node = next_node;
         }
 
-        on_timeout (plugin);
+        if(!plugin->is_updating_animation)
+                on_timeout (plugin);
 
         plugin->is_animating = true;
 }
@@ -513,6 +531,7 @@ view_free_sprites (view_t *view)
                 free_sprite (sprite, view->plugin);
         }
         ply_list_remove_all_nodes (view->sprites);
+        view->initialized = false;
 }
 
 static void
@@ -771,7 +790,10 @@ display_normal (ply_boot_splash_plugin_t *plugin)
 {
         pause_views (plugin);
         if (plugin->state != PLY_BOOT_SPLASH_DISPLAY_NORMAL)
+        {
                 hide_prompt (plugin);
+                unpause_views_animation(plugin);
+        }
 
         plugin->state = PLY_BOOT_SPLASH_DISPLAY_NORMAL;
         
@@ -800,7 +822,9 @@ display_password (ply_boot_splash_plugin_t *plugin,
 {
         pause_views (plugin);
         if (plugin->state == PLY_BOOT_SPLASH_DISPLAY_NORMAL)
-                stop_animation (plugin);
+                //stop_animation (plugin);
+                //TODO: Leave this to the user to decide. Animations might be desired to keep running
+                pause_views_animation(plugin);
 
         plugin->state = PLY_BOOT_SPLASH_DISPLAY_PASSWORD_ENTRY;
         
@@ -826,7 +850,8 @@ display_question (ply_boot_splash_plugin_t *plugin,
 {
         pause_views (plugin);
         if (plugin->state == PLY_BOOT_SPLASH_DISPLAY_NORMAL)
-                stop_animation (plugin);
+                //stop_animation (plugin);
+                pause_views_animation(plugin);
 
         plugin->state = PLY_BOOT_SPLASH_DISPLAY_QUESTION_ENTRY;
         
@@ -1199,12 +1224,9 @@ stop_animation (ply_boot_splash_plugin_t *plugin)
                 return;
 
         plugin->is_animating = false;
+        plugin->is_updating_animation = false;
 
-        if (plugin->loop != NULL) {
-                ply_event_loop_stop_watching_for_timeout (plugin->loop,
-                                                          (ply_event_loop_timeout_handler_t)
-                                                          on_timeout, plugin);
-        }
+        pause_views_animation(plugin);
 
         
         if (plugin->plugin_base_interface->stop_animation != NULL)
@@ -1249,7 +1271,7 @@ view_setup_scene (view_t *view)
                 view->plugin->plugin_base_interface->view_setup_scene(view);
         }
                 
-
+        view->initialized = true;
 }
 
 static void
