@@ -281,6 +281,33 @@ add_sprite (view_t      *view,
         new_sprite->refresh_me = 0;
         new_sprite->image = image;
         new_sprite->data = data;
+        new_sprite->custom_draw_handle = NULL;
+        new_sprite->custom_object = NULL;
+
+        ply_list_append_data (view->sprites, new_sprite);
+
+        return new_sprite;
+}
+
+sprite_t* add_custom_sprite(view_t* view,
+                            void* custom_object,
+                            sprite_draw_handle_t custom_draw_handle,
+                            void* data)
+{
+        sprite_t *new_sprite = calloc (1, sizeof(sprite_t));
+
+        new_sprite->x = 0;
+        new_sprite->y = 0;
+        new_sprite->z = 0;
+        new_sprite->oldx = 0;
+        new_sprite->oldy = 0;
+        new_sprite->oldz = 0;
+        new_sprite->opacity = 1;
+        new_sprite->refresh_me = 0;
+        new_sprite->image = NULL;
+        new_sprite->data = data;
+        new_sprite->custom_draw_handle = custom_draw_handle;
+        new_sprite->custom_object = custom_object;
 
         ply_list_append_data (view->sprites, new_sprite);
 
@@ -328,6 +355,7 @@ view_show_prompt (view_t     *view,
         if (plugin->plugin_base_interface->view_show_prompt != NULL)
         {
                 plugin->plugin_base_interface->view_show_prompt(view, prompt, entry_text, number_of_bullets);
+                sprite_list_sort(view);
         }
 }
 
@@ -342,6 +370,7 @@ view_show_message (view_t     *view,
         if (plugin->plugin_base_interface->view_show_message != NULL)
         {
                 plugin->plugin_base_interface->view_show_message(view, message);
+                sprite_list_sort(view);
         }
 }
 
@@ -566,16 +595,14 @@ on_draw (view_t             *view,
         if (width == 1 && height == 1)
                 single_pixel = true;
 
-        //TODO: Investigate whether this needs to be changed. Perhaps this should always be done and let the user determine
-        if (!(plugin->state == PLY_BOOT_SPLASH_DISPLAY_QUESTION_ENTRY ||
-             plugin->state == PLY_BOOT_SPLASH_DISPLAY_PASSWORD_ENTRY) &&
-            !plugin->should_show_console_messages) {
+        if (!plugin->should_show_console_messages) {
                 ply_list_node_t *node;
 
 
                 for (node = ply_list_get_first_node (view->sprites); node; node = ply_list_get_next_node (view->sprites, node)) {
                         sprite_t *sprite = ply_list_node_get_data (node);
                         ply_rectangle_t sprite_area;
+                        bool custom_draw_method = sprite->custom_draw_handle != NULL;
 
 
                         sprite_area.x = sprite->x;
@@ -584,26 +611,41 @@ on_draw (view_t             *view,
                         if (sprite_area.x >= (x + width)) continue;
                         if (sprite_area.y >= (y + height)) continue;
 
-                        sprite_area.width = ply_image_get_width (sprite->image);
-                        sprite_area.height = ply_image_get_height (sprite->image);
+                        //TODO: Perhaps include sprite_area inside of sprite_t instead of recalculating. A resize_sprite to image function can be added.
+                        if(custom_draw_method) {
+                                sprite_area.width = width;
+                                sprite_area.height = height;
+                        }
+                        else
+                        {
+                                sprite_area.width = ply_image_get_width (sprite->image);
+                                sprite_area.height = ply_image_get_height (sprite->image);
+                        }
 
                         if ((int) (sprite_area.x + sprite_area.width) <= x) continue;
                         if ((int) (sprite_area.y + sprite_area.height) <= y) continue;
 
-                        if (single_pixel) {
-                                uint32_t *image_data = ply_image_get_data (sprite->image);
-                                uint32_t overlay_pixel = image_data[(x - sprite_area.x) + (y - sprite_area.y) * sprite_area.width];
-                                float alpha = (float) ((overlay_pixel >> 24) & 0xff) / 255 * sprite->opacity;
-                                float red = (float) ((overlay_pixel >> 16) & 0xff) / 255 * sprite->opacity;
-                                float green = (float) ((overlay_pixel >> 8) & 0xff) / 255 * sprite->opacity;
-                                float blue = (float) ((overlay_pixel >> 0) & 0xff) / 255 * sprite->opacity;
-                                pixel_r = pixel_r * (1 - alpha) + red;
-                                pixel_g = pixel_g * (1 - alpha) + green;
-                                pixel_b = pixel_b * (1 - alpha) + blue;
-                        } else {
-                                ply_pixel_buffer_fill_with_argb32_data_at_opacity_with_clip (pixel_buffer,
+                        if (custom_draw_method)
+                        {
+                                sprite->custom_draw_handle(sprite->custom_object, pixel_buffer, sprite_area.x, sprite_area.y, sprite_area.width, sprite_area.height);
+                        }
+                        else
+                        {
+                                if (single_pixel) {
+                                        uint32_t *image_data = ply_image_get_data (sprite->image);
+                                        uint32_t overlay_pixel = image_data[(x - sprite_area.x) + (y - sprite_area.y) * sprite_area.width];
+                                        float alpha = (float) ((overlay_pixel >> 24) & 0xff) / 255 * sprite->opacity;
+                                        float red = (float) ((overlay_pixel >> 16) & 0xff) / 255 * sprite->opacity;
+                                        float green = (float) ((overlay_pixel >> 8) & 0xff) / 255 * sprite->opacity;
+                                        float blue = (float) ((overlay_pixel >> 0) & 0xff) / 255 * sprite->opacity;
+                                        pixel_r = pixel_r * (1 - alpha) + red;
+                                        pixel_g = pixel_g * (1 - alpha) + green;
+                                        pixel_b = pixel_b * (1 - alpha) + blue;
+                                } else {
+                                        ply_pixel_buffer_fill_with_argb32_data_at_opacity_with_clip (pixel_buffer,
                                                                                              &sprite_area, &clip_area,
                                                                                              ply_image_get_data (sprite->image), sprite->opacity);
+                                }
                         }
                 }
         }

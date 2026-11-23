@@ -53,6 +53,7 @@ typedef enum
         PLY_BOOT_SPLASH_DISPLAY_PASSWORD_ENTRY
 } ply_boot_splash_display_type_t;
 
+typedef void (*sprite_draw_handle_t)(void *entry, ply_pixel_buffer_t *pixel_buffer, long x, long y, unsigned long width, unsigned long height);
 typedef struct
 {
         int           x;
@@ -65,6 +66,9 @@ typedef struct
         float         opacity;
         ply_image_t  *image;
         void         *data;
+        
+        sprite_draw_handle_t custom_draw_handle;
+        void* custom_object;
 } sprite_t;
 
 
@@ -184,6 +188,7 @@ static void pause_views (ply_boot_splash_plugin_t *plugin);
 static void unpause_views (ply_boot_splash_plugin_t *plugin);
 
 sprite_t *add_sprite (view_t *view, ply_image_t *image, void *data);
+sprite_t* add_custom_sprite(view_t* view, void* custom_object, sprite_draw_handle_t custom_draw_handle, void* data);
 static void view_setup_scene (view_t *view);
 static void view_start_animation (view_t *view);
 static void view_show_prompt_on_console_viewer (view_t *view, const char *prompt, const char *entry_text, int number_of_bullets);
