@@ -23,6 +23,7 @@ typedef enum
         SPRITE_TYPE_SATELLITE,
         SPRITE_TYPE_PROGRESS,
         SPRITE_TYPE_STAR_BG,
+        SPRITE_TYPE_CUSTOM,
 } sprite_type_t;
 
 
@@ -96,6 +97,19 @@ typedef struct {
         
         ply_rectangle_t           box_area, lock_area, logo_area;
         ply_image_t              *scaled_background_image;
+        
+        //TODO: There's gotta be a better way, or this should be set to NULL when freed
+        sprite_t*                 entry_sprite;
+        sprite_t*                 label_sprite;
+        sprite_t*                 message_label_sprite;
+        sprite_t*                 box_sprite;
+        sprite_t*                 lock_sprite;
+        sprite_t*                 logo_sprite;
+
+#ifdef  SHOW_PROGRESS_BAR
+	sprite_t*		  progress_bar_sprite;
+#endif
+
 } view_data_t;
 
 
@@ -180,23 +194,25 @@ void loc_view_show_prompt(view_t *view, const char *prompt, const char *entry_te
                 screen_width = ply_pixel_display_get_width (view->display);
                 screen_height = ply_pixel_display_get_height (view->display);
 
-                view_data->box_area.width = ply_image_get_width (plugin_data->box_image);
-                view_data->box_area.height = ply_image_get_height (plugin_data->box_image);
-                view_data->box_area.x = screen_width / 2.0 - view_data->box_area.width / 2.0;
-                view_data->box_area.y = screen_height / 2.0 - view_data->box_area.height / 2.0;
-
-                view_data->lock_area.width = ply_image_get_width (plugin_data->lock_image);
-                view_data->lock_area.height = ply_image_get_height (plugin_data->lock_image);
-
                 entry_width = ply_entry_get_width (view_data->entry);
                 entry_height = ply_entry_get_height (view_data->entry);
 
                 x = screen_width / 2.0 - (view_data->lock_area.width + entry_width) / 2.0 + view_data->lock_area.width;
                 y = screen_height / 2.0 - entry_height / 2.0;
 
-                view_data->lock_area.x = screen_width / 2.0 - (view_data->lock_area.width + entry_width) / 2.0;
-                view_data->lock_area.y = screen_height / 2.0 - view_data->lock_area.height / 2.0;
-
+                view_data->box_sprite->oldz = view_data->box_sprite->z;
+                view_data->box_sprite->z = 999;
+                view_data->lock_sprite->oldz = view_data->lock_sprite->z;
+                view_data->lock_sprite->z = 999;
+                view_data->logo_sprite->oldx = view_data->logo_sprite->x;
+                view_data->logo_sprite->oldy = view_data->logo_sprite->y;
+                view_data->logo_sprite->x = 20;
+                view_data->logo_sprite->y = 20;
+#ifdef  SHOW_PROGRESS_BAR
+		view_data->progress_bar_sprite->oldz = view_data->progress_bar_sprite->z;
+        	view_data->progress_bar_sprite->z = -11000;
+#endif
+                
                 ply_entry_show (view_data->entry, plugin->loop, view->display, x, y);
         }
 
@@ -227,8 +243,27 @@ void loc_view_show_message(view_t *view, const char *message){
 static void loc_view_hide_prompt(view_t * view)
 {
         view_data_t* view_data = view->data;
+        plugin_data_t* plugin_data = view->plugin->plugin_data;
+        unsigned long screen_width, screen_height;
         ply_entry_hide (view_data->entry);
         ply_label_hide (view_data->label);
+        
+        view_data->box_sprite->oldz = view_data->box_sprite->z;
+        view_data->box_sprite->z = -11000;
+        view_data->lock_sprite->oldz = view_data->lock_sprite->z;
+        view_data->lock_sprite->z = -11000;
+
+
+#ifdef  SHOW_PROGRESS_BAR
+	view_data->progress_bar_sprite->oldz = view_data->progress_bar_sprite->z;
+        view_data->progress_bar_sprite->z = 10011;
+#endif
+        
+        screen_width = ply_pixel_display_get_width (view->display);
+        screen_height = ply_pixel_display_get_height (view->display);
+        
+        view_data->logo_sprite->x = screen_width / 2 - ply_image_get_width (plugin_data->logo_image) / 2;
+        view_data->logo_sprite->y = screen_height / 2 - ply_image_get_height (plugin_data->logo_image) / 2;
 }
 
 
@@ -346,6 +381,10 @@ static void free_sprite_data(sprite_t* sprite)
                         free (star_bg->star_x);
                         free (star_bg->star_y);
                         free (star_bg->star_refresh);
+                        break;
+                }
+                case SPRITE_TYPE_CUSTOM:
+                {
                         break;
                 }
         }
@@ -745,6 +784,8 @@ sprite_move (view_t   *view,
         case SPRITE_TYPE_STAR_BG:
                 star_bg_update (view, sprite, time);
                 break;
+        case SPRITE_TYPE_CUSTOM:
+                break;
         }
 }
 
@@ -910,6 +951,7 @@ loc_view_setup_scene (view_t *view)
         sprite->x = screen_width / 2 - ply_image_get_width (plugin_data->logo_image) / 2;
         sprite->y = screen_height / 2 - ply_image_get_height (plugin_data->logo_image) / 2;
         sprite->z = 1000;
+        view_data->logo_sprite = sprite;
 
 #ifdef SHOW_LOGO_HALO
         plugin_data->highlight_logo_image = ply_image_resize (plugin_data->logo_image, ply_image_get_width (plugin_data->logo_image) + HALO_BLUR * 2, ply_image_get_height (plugin_data->logo_image) + HALO_BLUR * 2);
@@ -1012,6 +1054,7 @@ loc_view_setup_scene (view_t *view)
         sprite->x = x;
         sprite->y = y;
         sprite->z = 10011;
+	view_data->progress_bar_sprite = sprite;
         progress_update (view, sprite, 0);
 
 
@@ -1051,6 +1094,71 @@ loc_view_setup_scene (view_t *view)
         }
         flare->frame_count = 0;
         flare_update (sprite, i);
+        
+        
+        sprite_data = malloc(sizeof(sprite_data_t));
+        sprite_data->dat = NULL;
+        sprite_data->type = SPRITE_TYPE_STATIC;
+        
+        
+        view_data->box_area.width = ply_image_get_width (plugin_data->box_image);
+        view_data->box_area.height = ply_image_get_height (plugin_data->box_image);
+        view_data->box_area.x = screen_width / 2.0 - view_data->box_area.width / 2.0;
+        view_data->box_area.y = screen_height / 2.0 - view_data->box_area.height / 2.0;
+        
+        sprite = add_sprite(view, plugin_data->box_image, sprite_data);
+        sprite->x = view_data->box_area.x;
+        sprite->y = view_data->box_area.y;
+        sprite->z = -11000;
+        view_data->box_sprite = sprite;
+        
+        
+        sprite_data = malloc(sizeof(sprite_data_t));
+        sprite_data->dat = NULL;
+        sprite_data->type = SPRITE_TYPE_STATIC;
+        
+
+        int entry_width, entry_height;
+        entry_width = ply_entry_get_width (view_data->entry);
+        entry_height = ply_entry_get_height (view_data->entry);
+
+        view_data->lock_area.width = ply_image_get_width (plugin_data->lock_image);
+        view_data->lock_area.height = ply_image_get_height (plugin_data->lock_image);
+        view_data->lock_area.x = screen_width / 2.0 - (view_data->lock_area.width + entry_width) / 2.0;
+        view_data->lock_area.y = screen_height / 2.0 - view_data->lock_area.height / 2.0;
+        
+        sprite = add_sprite(view, plugin_data->lock_image, sprite_data);
+        sprite->x = view_data->lock_area.x;
+        sprite->y = view_data->lock_area.y;
+        sprite->z = -11000;
+        view_data->lock_sprite = sprite;
+        
+        
+        
+        sprite_data = malloc(sizeof(sprite_data_t));
+        sprite_data->dat = NULL;
+        sprite_data->type = SPRITE_TYPE_CUSTOM;
+        
+        sprite = add_custom_sprite(view, view_data->entry, (sprite_draw_handle_t)ply_entry_draw_area, sprite_data);
+        sprite->z = 1000;
+        view_data->entry_sprite = sprite;
+        
+        
+        sprite_data = malloc(sizeof(sprite_data_t));
+        sprite_data->dat = NULL;
+        sprite_data->type = SPRITE_TYPE_CUSTOM;
+        
+        sprite = add_custom_sprite(view, view_data->label, (sprite_draw_handle_t)ply_label_draw_area, sprite_data);
+        sprite->z = 1000;
+        view_data->label_sprite = sprite;
+        
+        sprite_data = malloc(sizeof(sprite_data_t));
+        sprite_data->dat = NULL;
+        sprite_data->type = SPRITE_TYPE_CUSTOM;
+        
+        sprite = add_custom_sprite(view, view_data->message_label, (sprite_draw_handle_t)ply_label_draw_area, sprite_data);
+        sprite->z = 1000;
+        view_data->message_label_sprite = sprite;
 }
 
 

@@ -238,6 +238,7 @@ static void show_prompt (ply_boot_splash_plugin_t *plugin, const char *prompt, c
 static void on_root_mounted (ply_boot_splash_plugin_t *plugin);
 static void become_idle (ply_boot_splash_plugin_t *plugin, ply_trigger_t *idle_trigger);
 
+void view_update_dirty_regions (view_t *view);
 static void view_animate_attime (view_t *view, double time);
 static void show_message (ply_boot_splash_plugin_t *plugin, const char *message);
 static void display_normal (ply_boot_splash_plugin_t *plugin);

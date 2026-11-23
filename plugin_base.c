@@ -355,7 +355,7 @@ view_show_prompt (view_t     *view,
         if (plugin->plugin_base_interface->view_show_prompt != NULL)
         {
                 plugin->plugin_base_interface->view_show_prompt(view, prompt, entry_text, number_of_bullets);
-                sprite_list_sort(view);
+                view_update_dirty_regions(view);
         }
 }
 
@@ -370,7 +370,7 @@ view_show_message (view_t     *view,
         if (plugin->plugin_base_interface->view_show_message != NULL)
         {
                 plugin->plugin_base_interface->view_show_message(view, message);
-                sprite_list_sort(view);
+                view_update_dirty_regions(view);
         }
 }
 
@@ -394,6 +394,7 @@ view_hide_prompt (view_t *view)
         if (plugin->plugin_base_interface->view_hide_prompt != NULL)
         {
                 plugin->plugin_base_interface->view_hide_prompt(view);
+                view_update_dirty_regions(view);
         }
                 
 }
@@ -1200,26 +1201,9 @@ show_splash_screen (ply_boot_splash_plugin_t *plugin,
         return res;
 }
 
-
-static void
-view_animate_attime (view_t *view,
-                     double  time)
+void view_update_dirty_regions(view_t* view)
 {
         ply_list_node_t *node;
-        ply_boot_splash_plugin_t *plugin;
-
-        plugin = view->plugin;
-
-        if (plugin->progress_target >= 0)
-                plugin->progress = (plugin->progress * 10 + plugin->progress_target) / 11;
-        
-        
-        if (plugin->plugin_base_interface->view_animate_attime != NULL)
-        {
-                plugin->plugin_base_interface->view_animate_attime(view, time);
-        }
-        
-        
         sprite_list_sort (view);
 
         for (node = ply_list_get_first_node (view->sprites); node; node = ply_list_get_next_node (view->sprites, node)) {
@@ -1251,7 +1235,27 @@ view_animate_attime (view_t *view,
                         }
                 }
         } 
+}
 
+static void
+view_animate_attime (view_t *view,
+                     double  time)
+{
+        ply_boot_splash_plugin_t *plugin;
+
+        plugin = view->plugin;
+
+        if (plugin->progress_target >= 0)
+                plugin->progress = (plugin->progress * 10 + plugin->progress_target) / 11;
+        
+        
+        if (plugin->plugin_base_interface->view_animate_attime != NULL)
+        {
+                plugin->plugin_base_interface->view_animate_attime(view, time);
+        }
+        
+        
+        view_update_dirty_regions(view);
 }
 
 static void
