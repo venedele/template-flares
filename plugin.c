@@ -200,16 +200,11 @@ void loc_view_show_prompt(view_t *view, const char *prompt, const char *entry_te
                 x = screen_width / 2.0 - (view_data->lock_area.width + entry_width) / 2.0 + view_data->lock_area.width;
                 y = screen_height / 2.0 - entry_height / 2.0;
 
-                view_data->box_sprite->oldz = view_data->box_sprite->z;
                 view_data->box_sprite->z = 999;
-                view_data->lock_sprite->oldz = view_data->lock_sprite->z;
                 view_data->lock_sprite->z = 999;
-                view_data->logo_sprite->oldx = view_data->logo_sprite->x;
-                view_data->logo_sprite->oldy = view_data->logo_sprite->y;
                 view_data->logo_sprite->x = 20;
                 view_data->logo_sprite->y = 20;
 #ifdef  SHOW_PROGRESS_BAR
-		view_data->progress_bar_sprite->oldz = view_data->progress_bar_sprite->z;
         	view_data->progress_bar_sprite->z = -11000;
 #endif
                 
@@ -248,14 +243,11 @@ static void loc_view_hide_prompt(view_t * view)
         ply_entry_hide (view_data->entry);
         ply_label_hide (view_data->label);
         
-        view_data->box_sprite->oldz = view_data->box_sprite->z;
         view_data->box_sprite->z = -11000;
-        view_data->lock_sprite->oldz = view_data->lock_sprite->z;
         view_data->lock_sprite->z = -11000;
 
 
 #ifdef  SHOW_PROGRESS_BAR
-	view_data->progress_bar_sprite->oldz = view_data->progress_bar_sprite->z;
         view_data->progress_bar_sprite->z = 10011;
 #endif
         
@@ -764,10 +756,10 @@ sprite_move (view_t   *view,
              sprite_t *sprite,
              double    time)
 {
-        //TODO: Hopefully temporary, library should take care of this
-        sprite->oldx = sprite->x;
-        sprite->oldy = sprite->y;
-        sprite->oldz = sprite->z;
+        //NOTE: oldx, oldy and oldz need to be saved manually after calling ply_..._draw_area functions manually outside of view_animate_attime.
+        //sprite->oldx = sprite->x;
+        //sprite->oldy = sprite->y;
+        //sprite->oldz = sprite->z;
         sprite_data_t* sprite_data = sprite->data;
         switch (sprite_data->type) {
         case SPRITE_TYPE_STATIC:
@@ -810,19 +802,8 @@ loc_view_animate_attime (view_t *view,
                 node = ply_list_get_next_node (view->sprites, node);
         }
 
-        sprite_list_sort (view);
-
         for (node = ply_list_get_first_node (view->sprites); node; node = ply_list_get_next_node (view->sprites, node)) {
                 sprite_t *sprite = ply_list_node_get_data (node);
-                if (sprite->x != sprite->oldx ||
-                    sprite->y != sprite->oldy ||
-                    sprite->z != sprite->oldz ||
-                    sprite->refresh_me) {
-                        sprite->refresh_me = 0;
-
-                        int width = ply_image_get_width (sprite->image);
-                        int height = ply_image_get_height (sprite->image);
-
                         sprite_data_t* sprite_data = sprite->data;
                         if (sprite_data->type == SPRITE_TYPE_STAR_BG) {
                                 star_bg_t *star_bg = sprite_data->dat;
@@ -837,25 +818,6 @@ loc_view_animate_attime (view_t *view,
                                 continue;
                         }
 
-
-
-                        int x = sprite->x - sprite->oldx;
-                        int y = sprite->y - sprite->oldy;
-
-                        if (x < width && x > -width && y < height && y > -height) {
-                                x = MIN (sprite->x, sprite->oldx);
-                                y = MIN (sprite->y, sprite->oldy);
-                                width = (MAX (sprite->x, sprite->oldx) - x) + ply_image_get_width (sprite->image);
-                                height = (MAX (sprite->y, sprite->oldy) - y) + ply_image_get_height (sprite->image);
-                                ply_pixel_display_draw_area (view->display,
-                                                             x, y, width, height);
-                        } else {
-                                ply_pixel_display_draw_area (view->display,
-                                                             sprite->x, sprite->y, width, height);
-                                ply_pixel_display_draw_area (view->display,
-                                                             sprite->oldx, sprite->oldy, width, height);
-                        }
-                }
         }
 }
 

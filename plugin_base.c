@@ -1233,6 +1233,9 @@ void view_update_dirty_regions(view_t* view)
                                 ply_pixel_display_draw_area (view->display,
                                                              sprite->oldx, sprite->oldy, width, height);
                         }
+                        sprite->oldx = sprite->x;
+                        sprite->oldy = sprite->y;
+                        sprite->oldz = sprite->z;
                 }
         } 
 }
