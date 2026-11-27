@@ -207,8 +207,11 @@ void loc_view_show_prompt(view_t *view, const char *prompt, const char *entry_te
 #ifdef  SHOW_PROGRESS_BAR
         	view_data->progress_bar_sprite->z = -11000;
 #endif
-                
-                ply_entry_show (view_data->entry, plugin->loop, view->display, x, y);
+                view_data->entry_sprite->opacity = 1;
+                view_data->entry_sprite->x = x;
+                view_data->entry_sprite->y = y;
+                view_data->entry_sprite->refresh_me = true;
+                //ply_entry_show (view_data->entry, plugin->loop, view->display, x, y);
         }
 
         if (prompt != NULL) {
@@ -216,8 +219,13 @@ void loc_view_show_prompt(view_t *view, const char *prompt, const char *entry_te
 
                 x = view_data->box_area.x + view_data->lock_area.width / 2;
                 y = view_data->box_area.y + view_data->box_area.height;
-
-                ply_label_show (view_data->label, view->display, x, y);
+                
+                //TODO: Move to setup scene
+                view_data->label_sprite->x = x;
+                view_data->label_sprite->y = y;
+                view_data->label_sprite->opacity = 1;
+                view_data->label_sprite->refresh_me = true;
+                //ply_label_show (view_data->label, view->display, x, y);
         }
 }
 
@@ -227,12 +235,11 @@ void loc_view_show_message(view_t *view, const char *message){
         view_data_t* view_data = view->data;
         
         ply_label_set_text (view_data->message_label, message);
-        ply_label_show (view_data->message_label, view->display, 10, 10);
-
-        //TODO: Hopefully temporary, can perhaps add labels and entries to sprites
-        ply_pixel_display_draw_area (view->display, 10, 10,
-                                             ply_label_get_width (view_data->message_label),
-                                             ply_label_get_height (view_data->message_label));
+        view_data->message_label_sprite->x = 10;
+        view_data->message_label_sprite->y = 10;
+        view_data->message_label_sprite->opacity = 1;
+        view_data->message_label_sprite->refresh_me = true;
+        //ply_label_show (view_data->message_label, view->display, 10, 10);
 }
 
 static void loc_view_hide_prompt(view_t * view)
@@ -240,6 +247,8 @@ static void loc_view_hide_prompt(view_t * view)
         view_data_t* view_data = view->data;
         plugin_data_t* plugin_data = view->plugin->plugin_data;
         unsigned long screen_width, screen_height;
+        view_data->entry_sprite->opacity = 0;
+        view_data->label_sprite->opacity = 0;
         ply_entry_hide (view_data->entry);
         ply_label_hide (view_data->label);
         
@@ -805,7 +814,8 @@ loc_view_animate_attime (view_t *view,
         for (node = ply_list_get_first_node (view->sprites); node; node = ply_list_get_next_node (view->sprites, node)) {
                 sprite_t *sprite = ply_list_node_get_data (node);
                         sprite_data_t* sprite_data = sprite->data;
-                        if (sprite_data->type == SPRITE_TYPE_STAR_BG) {
+                        if (sprite_data->type == SPRITE_TYPE_STAR_BG && sprite->refresh_me) {
+                                sprite->refresh_me = 0;
                                 star_bg_t *star_bg = sprite_data->dat;
                                 int i;
                                 for (i = 0; i < star_bg->star_count; i++) {
@@ -837,10 +847,34 @@ stop_animation (ply_boot_splash_plugin_t *plugin)
 
 //TODO: Rewrite background to be a sprite instead
 
+static void move_entry(ply_entry_t* entry, view_t* view, int x, int y)
+{
+        ply_entry_show(entry, view->plugin->loop, view->display, x, y);
+}
+
+static void move_label(ply_label_t* entry, view_t* view, int x, int y)
+{
+        ply_label_show(entry, view->display, x, y);
+}
 
 static void
 loc_view_setup_scene (view_t *view)
 {
+        static sprite_custom_drawer_t entry_draw = {
+                .get_height = (sprite_size_handle_t)ply_entry_get_height,
+                .get_width = (sprite_size_handle_t)ply_entry_get_width,
+                .draw_area_handle = (sprite_draw_handle_t)ply_entry_draw_area,
+                .move_handle = (sprite_move_handle_t)move_entry,
+        };
+        
+        static sprite_custom_drawer_t label_draw = {
+                .get_height = (sprite_size_handle_t)ply_label_get_height,
+                .get_width = (sprite_size_handle_t)ply_label_get_width,
+                .draw_area_handle = (sprite_draw_handle_t)ply_label_draw_area,
+                .move_handle = (sprite_move_handle_t)move_label,
+        };
+        
+        
         ply_boot_splash_plugin_t *plugin;
         plugin_data_t* plugin_data;
         sprite_t *sprite;
@@ -1080,9 +1114,8 @@ loc_view_setup_scene (view_t *view)
         sprite_data->type = SPRITE_TYPE_STATIC;
         
 
-        int entry_width, entry_height;
+        int entry_width;
         entry_width = ply_entry_get_width (view_data->entry);
-        entry_height = ply_entry_get_height (view_data->entry);
 
         view_data->lock_area.width = ply_image_get_width (plugin_data->lock_image);
         view_data->lock_area.height = ply_image_get_height (plugin_data->lock_image);
@@ -1101,8 +1134,9 @@ loc_view_setup_scene (view_t *view)
         sprite_data->dat = NULL;
         sprite_data->type = SPRITE_TYPE_CUSTOM;
         
-        sprite = add_custom_sprite(view, view_data->entry, (sprite_draw_handle_t)ply_entry_draw_area, sprite_data);
+        sprite = add_custom_sprite(view, view_data->entry, &entry_draw, sprite_data);
         sprite->z = 1000;
+        sprite->opacity = 0;
         view_data->entry_sprite = sprite;
         
         
@@ -1110,16 +1144,18 @@ loc_view_setup_scene (view_t *view)
         sprite_data->dat = NULL;
         sprite_data->type = SPRITE_TYPE_CUSTOM;
         
-        sprite = add_custom_sprite(view, view_data->label, (sprite_draw_handle_t)ply_label_draw_area, sprite_data);
+        sprite = add_custom_sprite(view, view_data->label, &label_draw, sprite_data);
         sprite->z = 1000;
+        sprite->opacity = 0;
         view_data->label_sprite = sprite;
         
         sprite_data = malloc(sizeof(sprite_data_t));
         sprite_data->dat = NULL;
         sprite_data->type = SPRITE_TYPE_CUSTOM;
         
-        sprite = add_custom_sprite(view, view_data->message_label, (sprite_draw_handle_t)ply_label_draw_area, sprite_data);
+        sprite = add_custom_sprite(view, view_data->message_label, &label_draw, sprite_data);
         sprite->z = 1000;
+        sprite->opacity = 0;
         view_data->message_label_sprite = sprite;
 }
 

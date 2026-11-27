@@ -281,7 +281,7 @@ add_sprite (view_t      *view,
         new_sprite->refresh_me = 0;
         new_sprite->image = image;
         new_sprite->data = data;
-        new_sprite->custom_draw_handle = NULL;
+        new_sprite->custom_draw = NULL;
         new_sprite->custom_object = NULL;
 
         ply_list_append_data (view->sprites, new_sprite);
@@ -291,7 +291,7 @@ add_sprite (view_t      *view,
 
 sprite_t* add_custom_sprite(view_t* view,
                             void* custom_object,
-                            sprite_draw_handle_t custom_draw_handle,
+                            sprite_custom_drawer_t* custom_draw_handle,
                             void* data)
 {
         sprite_t *new_sprite = calloc (1, sizeof(sprite_t));
@@ -306,7 +306,7 @@ sprite_t* add_custom_sprite(view_t* view,
         new_sprite->refresh_me = 0;
         new_sprite->image = NULL;
         new_sprite->data = data;
-        new_sprite->custom_draw_handle = custom_draw_handle;
+        new_sprite->custom_draw = custom_draw_handle;
         new_sprite->custom_object = custom_object;
 
         ply_list_append_data (view->sprites, new_sprite);
@@ -603,7 +603,7 @@ on_draw (view_t             *view,
                 for (node = ply_list_get_first_node (view->sprites); node; node = ply_list_get_next_node (view->sprites, node)) {
                         sprite_t *sprite = ply_list_node_get_data (node);
                         ply_rectangle_t sprite_area;
-                        bool custom_draw_method = sprite->custom_draw_handle != NULL;
+                        sprite_custom_drawer_t* draw_obj = sprite->custom_draw;
 
 
                         sprite_area.x = sprite->x;
@@ -613,9 +613,11 @@ on_draw (view_t             *view,
                         if (sprite_area.y >= (y + height)) continue;
 
                         //TODO: Perhaps include sprite_area inside of sprite_t instead of recalculating. A resize_sprite to image function can be added.
-                        if(custom_draw_method) {
+                        if(draw_obj != NULL) {
                                 sprite_area.width = width;
                                 sprite_area.height = height;
+                                sprite_area.x = x;
+                                sprite_area.y = y;
                         }
                         else
                         {
@@ -626,9 +628,9 @@ on_draw (view_t             *view,
                         if ((int) (sprite_area.x + sprite_area.width) <= x) continue;
                         if ((int) (sprite_area.y + sprite_area.height) <= y) continue;
 
-                        if (custom_draw_method)
+                        if (draw_obj != NULL)
                         {
-                                sprite->custom_draw_handle(sprite->custom_object, pixel_buffer, sprite_area.x, sprite_area.y, sprite_area.width, sprite_area.height);
+                                draw_obj->draw_area_handle(sprite->custom_object, pixel_buffer, sprite_area.x, sprite_area.y, sprite_area.width, sprite_area.height);
                         }
                         else
                         {
@@ -1213,9 +1215,21 @@ void view_update_dirty_regions(view_t* view)
                     sprite->z != sprite->oldz ||
                     sprite->refresh_me) {
                         sprite->refresh_me = 0;
+                        sprite_custom_drawer_t* draw_obj = sprite->custom_draw;
+                        //TODO: Add a changed width detection
 
-                        int width = ply_image_get_width (sprite->image);
-                        int height = ply_image_get_height (sprite->image);
+
+                        int width, height;
+                        if(draw_obj != NULL) {
+                                width = draw_obj->get_width(sprite->custom_object);
+                                height = draw_obj->get_height(sprite->custom_object);
+                                if(sprite->opacity > 0)
+                                        draw_obj->move_handle(sprite->custom_object, view, sprite->x, sprite->y);
+                                //NOTE: In the case of ply_entry draw_area will be called twice, but it will be the same region, so no extra work will be done.
+                        } else {
+                                width = ply_image_get_width (sprite->image);
+                                height = ply_image_get_height (sprite->image);
+                        }
 
                         int x = sprite->x - sprite->oldx;
                         int y = sprite->y - sprite->oldy;
@@ -1223,8 +1237,8 @@ void view_update_dirty_regions(view_t* view)
                         if (x < width && x > -width && y < height && y > -height) {
                                 x = MIN (sprite->x, sprite->oldx);
                                 y = MIN (sprite->y, sprite->oldy);
-                                width = (MAX (sprite->x, sprite->oldx) - x) + ply_image_get_width (sprite->image);
-                                height = (MAX (sprite->y, sprite->oldy) - y) + ply_image_get_height (sprite->image);
+                                width = (MAX (sprite->x, sprite->oldx) - x) + width;
+                                height = (MAX (sprite->y, sprite->oldy) - y) + height;
                                 ply_pixel_display_draw_area (view->display,
                                                              x, y, width, height);
                         } else {
@@ -1318,6 +1332,7 @@ view_setup_scene (view_t *view)
         if (view->plugin->plugin_base_interface->view_setup_scene != NULL)
         {
                 view->plugin->plugin_base_interface->view_setup_scene(view);
+                sprite_list_sort(view);
         }
                 
         view->initialized = true;
